@@ -18,7 +18,7 @@ SETTINGS_FILE = "settings.json"
 
 # ----------------- مقادیر پیش‌فرض اولیه -----------------
 DEFAULT_SETTINGS = {
-    "admin_username": "Audhdudjjs",
+    "admin_username": 'Game15VoxSupport',
     "admin_password": "AriaAria1389",
     "file_channel": -1003933220851,
     "support_username": "@Audhdudjjs",
@@ -107,7 +107,7 @@ waiting_for_code = set()
 admin_states = {}  
 authenticated_admins = set()  
 
-TOKEN = '8650168471:AAE2tlu5wr3PHOOL7zyCaAeZnfACls56aBo'  # توکن رباتت رو اینجا بذار
+TOKEN = '8907948308:AAEkCcEFkviGA6rgP_6EOaWYg4GLzkBj3lU'  # توکن رباتت رو اینجا بذار
 
 # منوی اصلی کاربر
 menu = ReplyKeyboardMarkup(
