@@ -2,6 +2,7 @@ import json
 import os
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.error import TelegramError
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -17,10 +18,10 @@ SETTINGS_FILE = "settings.json"
 
 # ----------------- مقادیر پیش‌فرض اولیه -----------------
 DEFAULT_SETTINGS = {
-    "admin_username": 'Game15VoxSupport' ,
+    "admin_username": 'Game15VoxSupport',
     "admin_password": "AriaAria1389",
     "file_channel": -1003933220851,
-    "support_username": "@Audhdudjjs",
+    "support_username": 'Game15VoxSupport',
     "channel_link": "https://t.me/Game15Vox"
 }
 
@@ -88,14 +89,25 @@ def update_users_list(users_list):
     except:
         return False
 
+# ----------------- تابع بررسی عضویت اجباری -----------------
+async def check_sub(user_id: int, channel_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """بررسی اینکه آیا کاربر در کانال عضو است یا خیر"""
+    try:
+        member = await context.bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+        # وضعیت‌های معتبر برای کاربر عضو شده
+        if member.status in ["member", "administrator", "creator"]:
+            return True
+        return False
+    except TelegramError:
+        # اگر ربات نتواند چت را پیدا کند یا کاربر وجود نداشته باشد
+        return False
+
 # ----------------- وضعیت‌ها و منوهای ربات -----------------
 waiting_for_code = set()
 admin_states = {}  
 authenticated_admins = set()  
 
-# بارگذاری اولیه تنظیمات برای توکن ربات
-current_config = load_settings()
-TOKEN = '8907948308:AAEkCcEFkviGA6rgP_6EOaWYg4GLzkBj3lU'  # توکن توکن رباتت رو اینجا بذار
+TOKEN = '8650168471:AAE2tlu5wr3PHOOL7zyCaAeZnfACls56aBo'  # توکن رباتت رو اینجا بذار
 
 # منوی اصلی کاربر
 menu = ReplyKeyboardMarkup(
@@ -230,7 +242,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         await context.bot.forward_message(chat_id=u_id, from_chat_id=update.effective_chat.id, message_id=update.message.message_id)
                         success += 1
-                        await asyncio.sleep(0.05) # جلوگیری از اسپم بلاک تلگرام
+                        await asyncio.sleep(0.05)
                     except:
                         failed += 1
                 
@@ -332,7 +344,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("⚙️ به بخش تنظیمات پیکربندی ربات خوش آمدید.", reply_markup=settings_menu)
                 return
 
-            # دکمه‌های داخل بخش تنظیمات
             elif text == "🔧 تغییر آیدی پشتیبانی":
                 admin_states[user_id] = {"stage": "set_support"}
                 await update.message.reply_text("👤 آیدی جدید پشتیبانی را همراه با @ ارسال کنید:")
@@ -358,6 +369,16 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return    
 
     # ==================== بخش منوی عمومی کاربران ====================
+    # چک کردن عضویت اجباری کاربران عادی قبل از اجرای هر عملیاتی
+    is_subscribed = await check_sub(user_id, config["file_channel"], context)
+    if not is_subscribed:
+        await update.message.reply_text(
+            "📢 برای استفاده از این ربات، ابتدا باید در کانال ما عضو شوید!\n\n"
+            f"🔗 لینک کانال: {config['channel_link']}\n\n"
+            "✅ پس از عضویت، مجدداً دکمه مورد نظر یا دستور /start را بفرستید."
+        )
+        return
+
     if text == "📥 دانلود بازی":    
         waiting_for_code.add(user_id)    
         await update.message.reply_text(    
@@ -393,7 +414,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text in games:    
             try:    
                 game_data = games[text]
-                # سازگاری با سیستم ذخیره قدیم و جدید (آبجکت یا عدد ساده)
                 message_id = game_data["message_id"] if isinstance(game_data, dict) else game_data
                 
                 await context.bot.copy_message(    
@@ -403,7 +423,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )    
                 await update.message.reply_text("✅ فایل با موفقیت ارسال شد.\n\n🎮 Game15Vox")
                 
-                # ثبت آمار دانلود
                 if isinstance(game_data, dict):
                     games[text]["downloads"] = game_data.get("downloads", 0) + 1
                 else:
@@ -418,7 +437,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         waiting_for_code.discard(user_id)    
         return    
 
-    # پیام پیش‌فرض در صورت زدن متن اشتباه
     await update.message.reply_text("❌ لطفاً از منوی ربات استفاده کنید.")
 
 # ----------------- راه‌اندازی برنامه -----------------
@@ -430,3 +448,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("Bot Started...")
 app.run_polling()
+            
