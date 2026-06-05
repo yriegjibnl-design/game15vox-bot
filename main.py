@@ -17,7 +17,7 @@ SETTINGS_FILE = "settings.json"
 
 # ----------------- مقادیر پیش‌فرض اولیه -----------------
 DEFAULT_SETTINGS = {
-    "admin_username": "Audhdudjjs",
+    "admin_username": 'Game15VoxSupport' ,
     "admin_password": "AriaAria1389",
     "file_channel": -1003933220851,
     "support_username": "@Audhdudjjs",
