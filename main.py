@@ -25,7 +25,7 @@ DEFAULT_SETTINGS = {
     "channel_link": "https://t.me/Game15Vox"
 }
 
-# ----------------- توابع ماژولار مدیریت اطلاعات (JSON) -----------------
+# ----------------- توابع مدیریت اطلاعات -----------------
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
@@ -72,7 +72,6 @@ def load_users():
         return {}
 
 def save_user(user):
-    """ذخیره اطلاعات کامل کاربر شامل نام و تاریخ عضویت"""
     users = load_users()
     user_id = str(user.id)
     
@@ -102,8 +101,7 @@ waiting_for_code = set()
 admin_states = {}  
 authenticated_admins = set()  
 
-current_config = load_settings()
-TOKEN =  '8907948308:AAEkCcEFkviGA6rgP_6EOaWYg4GLzkBj3lU' # توکن رباتت رو اینجا بذار
+TOKEN =  '8907948308:AAEkCcEFkviGA6rgP_6EOaWYg4GLzkBj3lU'  # توکن رباتت رو اینجا بذار
 
 menu = ReplyKeyboardMarkup(
     [
@@ -117,8 +115,8 @@ admin_menu = ReplyKeyboardMarkup(
     [
         ["📊 آمار کاربران", "➕ افزودن بازی", "❌ حذف بازی"],
         ["📋 لیست بازی‌ها", "👥 لیست کاربران", "📢 ارسال همگانی"],
-        ["📈 آمار دانلود", "🔑 تغییر رمز مدیریت", "🗑 پاکسازی کاربران"],
-        ["⚙️ تنظیمات", "🚧 به زودی...", "🏠 بازگشت"]
+        ["🎨 ساخت بنر تبلیغاتی", "📈 آمار دانلود", "🔑 تغییر رمز مدیریت"], # دکمه ساخت بنر اضافه شد
+        ["⚙️ تنظیمات", "🗑 پاکسازی کاربران", "🏠 بازگشت"]
     ],
     resize_keyboard=True
 )
@@ -191,21 +189,18 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id in authenticated_admins and user_id in admin_states:
             stage = admin_states[user_id].get("stage")
 
-            # مرحله ۱ افزودن بازی: دریافت کد بازی
             if stage == "add_game_code":
                 admin_states[user_id]["game_code"] = text
                 admin_states[user_id]["stage"] = "add_game_name"
                 await update.message.reply_text(f"🔹 کد بازی «{text}» دریافت شد.\n\n📛 حالا نام اصلی بازی را وارد کنید:")
                 return
             
-            # مرحله ۲ افزودن بازی: دریافت نام بازی (جدید)
             elif stage == "add_game_name":
                 admin_states[user_id]["game_name"] = text
                 admin_states[user_id]["stage"] = "add_game_id"
                 await update.message.reply_text(f"🔹 نام بازی «{text}» ثبت شد.\n\n📥 حالا Message ID فایل را بفرستید:")
                 return
             
-            # مرحله ۳ افزودن بازی: دریافت Message ID و ذخیره کامل
             elif stage == "add_game_id":
                 if not text.isdigit():
                     await update.message.reply_text("❌ خطا: Message ID باید عدد باشد. دوباره ارسال کنید:")
@@ -291,13 +286,12 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ کد بازی که قصد حذفش را دارید ارسال کنید:", reply_markup=ReplyKeyboardRemove())
                 return
 
-            # نمایش پیشرفته لیست بازی‌ها با نام و لینک کپی آماده (جدید)
             elif text == "📋 لیست بازی‌ها":
                 games = load_games()
                 if not games:
                     await update.message.reply_text("📋 هیچ بازی ثبت نشده است.")
                     return
-                report = "📋 **لیست بازی‌های ثبت شده (جهت کپی آپدیت کانال):**\n\n"
+                report = "📋 **لیست بازی‌های ثبت شده:**\n\n"
                 for code, data in games.items():
                     if isinstance(data, dict):
                         g_name = data.get("name", "بدون نام")
@@ -308,7 +302,42 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(report, parse_mode="Markdown")
                 return
 
-            # نمایش لیست دقیق کاربران با نام و تاریخ عضویت (جدید)
+            # ==================== قابلیت جدید: ساخت بنر تبلیغاتی خودکار ====================
+            elif text == "🎨 ساخت بنر تبلیغاتی":
+                games = load_games()
+                if not games:
+                    await update.message.reply_text("❌ هیچ بازی در دیتابیس جهت ساخت بنر یافت نشد.")
+                    return
+                
+                # دریافت ۳ بازی آخر اضافه شده به دیتابیس و معکوس کردن برای چینش جدیدترین‌ها
+                last_games = list(games.items())[-3:]
+                last_games.reverse()
+                
+                banner = (
+                    "🎮 **جدیدترین بازی‌های اضافه شده به ربات Game15Vox!** 🎮\n\n"
+                    "⚡ همین حالا می‌توانید بازی‌های زیر را با سرعت بالا و مستقیم دانلود کنید:\n\n"
+                )
+                
+                for code, data in last_games:
+                    if isinstance(data, dict):
+                        g_name = data.get("name", "بازی جدید")
+                        banner += f"🔹 **{g_name}**\n👈 کد دانلود: `{code}`\n\n"
+                    else:
+                        banner += f"🔹 **بازی جدید**\n👈 کد دانلود: `{code}`\n\n"
+                
+                banner += (
+                    "✨ **روش دانلود:**\n"
+                    "1️⃣ وارد ربات شوید.\n"
+                    "2️⃣ دکمه 📥 **دانلود بازی** را بزنید.\n"
+                    "3️⃣ کد بازی بالا را بفرستید تا فایل مستقیم ارسال شود!\n\n"
+                    f"🤖 آیدی ربات: @Game15VoxBot\n"
+                    f"📢 کانال رسمی ما: {config['channel_link']}"
+                )
+                
+                await update.message.reply_text("✅ بنر تبلیغاتی شما با موفقیت آماده شد! متن زیر را کپی کنید:")
+                await update.message.reply_text(banner, parse_mode="Markdown")
+                return
+
             elif text == "👥 لیست کاربران":
                 users = load_users()
                 if not users:
@@ -376,10 +405,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif text == "🔙 بازگشت به پنل":
                 await update.message.reply_text("🔧 بازگشت به پنل اصلی مدیریت", reply_markup=admin_menu)
                 return
-
-            elif text == "🚧 به زودی...":    
-                await update.message.reply_text("🚧 این بخش در نسخه‌های بعدی اضافه خواهد شد.")    
-                return    
 
             elif text == "🏠 بازگشت":    
                 authenticated_admins.discard(user_id)
@@ -456,4 +481,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("Bot Started...")
 app.run_polling()
-    
+            
