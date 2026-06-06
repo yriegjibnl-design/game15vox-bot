@@ -101,7 +101,7 @@ waiting_for_code = set()
 admin_states = {}  
 authenticated_admins = set()  
 
-TOKEN =  '8907948308:AAEkCcEFkviGA6rgP_6EOaWYg4GLzkBj3lU'  # توکن رباتت رو اینجا بذار
+TOKEN = '8907948308:AAEkCcEFkviGA6rgP_6EOaWYg4GLzkBj3lU'  # توکن رباتت رو اینجا بذار
 
 menu = ReplyKeyboardMarkup(
     [
@@ -115,7 +115,7 @@ admin_menu = ReplyKeyboardMarkup(
     [
         ["📊 آمار کاربران", "➕ افزودن بازی", "❌ حذف بازی"],
         ["📋 لیست بازی‌ها", "👥 لیست کاربران", "📢 ارسال همگانی"],
-        ["🎨 ساخت بنر تبلیغاتی", "📈 آمار دانلود", "🔑 تغییر رمز مدیریت"], # دکمه ساخت بنر اضافه شد
+        ["🎨 ساخت بنر تبلیغاتی", "📈 آمار دانلود", "🔑 تغییر رمز مدیریت"],
         ["⚙️ تنظیمات", "🗑 پاکسازی کاربران", "🏠 بازگشت"]
     ],
     resize_keyboard=True
@@ -125,6 +125,15 @@ settings_menu = ReplyKeyboardMarkup(
     [
         ["🔧 تغییر آیدی پشتیبانی", "🔗 تغییر لینک کانال"],
         ["🔙 بازگشت به پنل"]
+    ],
+    resize_keyboard=True
+)
+
+# منوی افزودن پارت‌های بازی
+part_menu = ReplyKeyboardMarkup(
+    [
+        ["📥 ثبت شناسه فایل (پارت جدید)"],
+        ["💾 ذخیره و اتمام ثبت"]
     ],
     resize_keyboard=True
 )
@@ -197,26 +206,54 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             elif stage == "add_game_name":
                 admin_states[user_id]["game_name"] = text
-                admin_states[user_id]["stage"] = "add_game_id"
-                await update.message.reply_text(f"🔹 نام بازی «{text}» ثبت شد.\n\n📥 حالا Message ID فایل را بفرستید:")
+                admin_states[user_id]["message_ids"] = [] # ایجاد لیست پارت‌ها
+                admin_states[user_id]["stage"] = "manage_parts"
+                await update.message.reply_text(
+                    f"🔹 نام بازی «{text}» ثبت شد.\n\n"
+                    "حالا می‌توانید پارت‌های بازی را یکی‌یکی اضافه کنید یا بازی را ذخیره کنید:",
+                    reply_markup=part_menu
+                )
                 return
             
-            elif stage == "add_game_id":
+            elif stage == "manage_parts":
+                if text == "📥 ثبت شناسه فایل (پارت جدید)":
+                    admin_states[user_id]["stage"] = "waiting_for_part_id"
+                    await update.message.reply_text("📥 لطفا Message ID فایل (پارت جدید) را بفرستید:", reply_markup=ReplyKeyboardRemove())
+                    return
+                
+                elif text == "💾 ذخیره و اتمام ثبت":
+                    game_code = admin_states[user_id]["game_code"]
+                    game_name = admin_states[user_id]["game_name"]
+                    part_ids = admin_states[user_id]["message_ids"]
+                    
+                    if not part_ids:
+                        await update.message.reply_text("⚠️ شما هیچ پارت یا فایلی برای این بازی ثبت نکرده‌اید! ابتدا حداقل یک پارت ثبت کنید.")
+                        return
+                    
+                    games = load_games()
+                    games[game_code] = {
+                        "name": game_name,
+                        "message_ids": part_ids, # ذخیره به صورت آرایه برای بی‌نهایت پارت
+                        "downloads": games.get(game_code, {}).get("downloads", 0)
+                    }
+                    save_games(games)
+                    admin_states.pop(user_id, None)
+                    await update.message.reply_text(f"✅ بازی «{game_name}» با موفقیت همراه با {len(part_ids)} فایل/پارت ذخیره شد.", reply_markup=admin_menu)
+                    return
+                
+            elif stage == "waiting_for_part_id":
                 if not text.isdigit():
                     await update.message.reply_text("❌ خطا: Message ID باید عدد باشد. دوباره ارسال کنید:")
                     return
-                game_code = admin_states[user_id]["game_code"]
-                game_name = admin_states[user_id]["game_name"]
-                games = load_games()
                 
-                games[game_code] = {
-                    "name": game_name,
-                    "message_id": int(text), 
-                    "downloads": games.get(game_code, {}).get("downloads", 0)
-                }
-                save_games(games)
-                admin_states.pop(user_id, None)
-                await update.message.reply_text(f"✅ بازی «{game_name}» با موفقیت ذخیره شد.", reply_markup=admin_menu)
+                admin_states[user_id]["message_ids"].append(int(text))
+                current_count = len(admin_states[user_id]["message_ids"])
+                admin_states[user_id]["stage"] = "manage_parts"
+                await update.message.reply_text(
+                    f"✅ فایل شماره {current_count} با موفقیت در لیست موقت قرار گرفت.\n\n"
+                    "می‌توانید فایل بعدی را اضافه کنید یا کل بازی را ذخیره کنید:",
+                    reply_markup=part_menu
+                )
                 return
 
             elif stage == "delete_game":
@@ -295,21 +332,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for code, data in games.items():
                     if isinstance(data, dict):
                         g_name = data.get("name", "بدون نام")
-                        m_id = data.get("message_id")
-                        report += f"🎮 **{g_name}**\n🔑 کد دانلود: `{code}` | شناسه: `{m_id}`\n\n"
+                        if "message_ids" in data:
+                            report += f"🎮 **{g_name}** (چندپارتی)\n🔑 کد دانلود: `{code}` | تعداد پارت‌ها: `{len(data['message_ids'])}`\n\n"
+                        else:
+                            m_id = data.get("message_id")
+                            report += f"🎮 **{g_name}** (تک‌فایل)\n🔑 کد دانلود: `{code}` | شناسه: `{m_id}`\n\n"
                     else:
                         report += f"🔑 کد: `{code}` ➡️ شناسه پیام: `{data}`\n\n"
                 await update.message.reply_text(report, parse_mode="Markdown")
                 return
 
-            # ==================== قابلیت جدید: ساخت بنر تبلیغاتی خودکار ====================
             elif text == "🎨 ساخت بنر تبلیغاتی":
                 games = load_games()
                 if not games:
                     await update.message.reply_text("❌ هیچ بازی در دیتابیس جهت ساخت بنر یافت نشد.")
                     return
                 
-                # دریافت ۳ بازی آخر اضافه شده به دیتابیس و معکوس کردن برای چینش جدیدترین‌ها
                 last_games = list(games.items())[-3:]
                 last_games.reverse()
                 
@@ -412,7 +450,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🏠 بازگشت به منوی اصلی", reply_markup=menu)    
                 return    
 
-    # ==================== بخش منوی عمومی کاربران ====================
+    # ==================== بخش منوی عمومی کاربران (دانلود چند پارت) ====================
     if text == "📥 دانلود بازی":    
         waiting_for_code.add(user_id)    
         await update.message.reply_text(    
@@ -447,15 +485,29 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text in games:    
             try:    
                 game_data = games[text]
-                message_id = game_data["message_id"] if isinstance(game_data, dict) else game_data
                 
-                await context.bot.copy_message(    
-                    chat_id=update.effective_chat.id,    
-                    from_chat_id=config["file_channel"],    
-                    message_id=int(message_id)    
-                )    
-                await update.message.reply_text("✅ فایل با موفقیت ارسال شد.\n\n🎮 Game15Vox")
+                # اگر بازی از نوع جدید چندپارتی باشد
+                if isinstance(game_data, dict) and "message_ids" in game_data:
+                    for m_id in game_data["message_ids"]:
+                        await context.bot.copy_message(    
+                            chat_id=update.effective_chat.id,    
+                            from_chat_id=config["file_channel"],    
+                            message_id=int(m_id)    
+                        )    
+                        await asyncio.sleep(0.5) # وقفه کوتاه برای جلوگیری از خطای تلگرام
+                    await update.message.reply_text("✅ تمام پارت‌های بازی با موفقیت ارسال شد.\n\n🎮 Game15Vox")
                 
+                # پشتیبانی از ساختار تک‌فایلی قدیمی ربات
+                else:
+                    message_id = game_data["message_id"] if isinstance(game_data, dict) else game_data
+                    await context.bot.copy_message(    
+                        chat_id=update.effective_chat.id,    
+                        from_chat_id=config["file_channel"],    
+                        message_id=int(message_id)    
+                    )    
+                    await update.message.reply_text("✅ فایل با موفقیت ارسال شد.\n\n🎮 Game15Vox")
+                
+                # افزایش آمار دانلود
                 if isinstance(game_data, dict):
                     games[text]["downloads"] = game_data.get("downloads", 0) + 1
                 else:
@@ -481,4 +533,3 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
 print("Bot Started...")
 app.run_polling()
-            
